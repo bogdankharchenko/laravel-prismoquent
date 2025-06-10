@@ -63,7 +63,7 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	/**
 	 * The original Prismic document
 	 *
-	 * @var \Prismic\Document
+	 * @var \Prismic\Document|object
 	 */
 	public $document;
 	
@@ -91,9 +91,9 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	/**
 	 * Create a new Prismoquent model instance.
 	 *
-	 * @param \stdClass $document
+	 * @param Document|stdClass|null $document
 	 */
-	public function __construct(Document $document = null)
+	public function __construct($document = null)
 	{
 		if ($document) {
 			$this->setDocument($document);
@@ -189,10 +189,10 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	}
 	
 	/**
-	 * @param \stdClass $document
+	 * @param Document|stdClass $document
 	 * @return \Galahad\Prismoquent\Model
 	 */
-	public function setDocument(Document $document) : self
+	public function setDocument($document) : self
 	{
 		$this->document = $document;
 		
@@ -214,10 +214,10 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	/**
 	 * Create a new instance of the given model
 	 *
-	 * @param object $document
+	 * @param Document|stdClass $document
 	 * @return static
 	 */
-	public function newInstance(Document $document)
+	public function newInstance($document)
 	{
 		return new static($document);
 	}
@@ -225,10 +225,10 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	/**
 	 * Create a new model instance from a document retrieved via a Builder
 	 *
-	 * @param \stdClass|\Prismic\Prismic $document
+	 * @param Document|stdClass $document
 	 * @return static
 	 */
-	public function newFromBuilder(Document $document)
+	public function newFromBuilder($document)
 	{
 		$model = $this->newInstance($document);
 		
@@ -376,7 +376,11 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	 */
 	public function getKey() : ?string
 	{
-		return $this->document->getId() ?? null;
+		if ($this->document instanceof Document) {
+			return $this->document->getId() ?? null;
+		} else {
+			return $this->document->id ?? null;
+		}
 	}
 	
 	/**
@@ -386,7 +390,11 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	 */
 	public function getRouteKey() : ?string
 	{
-		return $this->document->getUid() ?? null;
+		if ($this->document instanceof Document) {
+			return $this->document->getUid() ?? null;
+		} else {
+			return $this->document->uid ?? null;
+		}
 	}
 	
 	/**
@@ -401,11 +409,25 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	 * Retrieve the model for a bound value.
 	 *
 	 * @param  mixed $value
+	 * @param  string|null $field
 	 * @return \Galahad\Prismoquent\Model
 	 */
-	public function resolveRouteBinding($value) : ?self
+	public function resolveRouteBinding($value, $field = null) : ?self
 	{
 		return $this->newQuery()->findByUID($this->getType(), $value);
+	}
+
+	/**
+	 * Retrieve the child model for a bound value.
+	 *
+	 * @param  string $childType
+	 * @param  mixed $value
+	 * @param  string|null $field
+	 * @return \Galahad\Prismoquent\Model|null
+	 */
+	public function resolveChildRouteBinding($childType, $value, $field = null) : ?self
+	{
+		return null;
 	}
 	
 	/**
@@ -493,7 +515,12 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	 */
 	public function getAttributes()
 	{
-		return (array) $this->document->getData();
+		if ($this->document instanceof Document) {
+			return (array) $this->document->getData();
+		} else {
+			// stdClass object from Prismic API v5
+			return (array) ($this->document->data ?? []);
+		}
 	}
 	
 	/**
@@ -515,7 +542,8 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	 */
 	public function getDates()
 	{
-		return array_unique(array_merge($this->dates, ['first_publication_date', 'last_publication_date']));
+		$dates = $this->dates ?: [];
+		return array_unique(array_merge($dates, ['first_publication_date', 'last_publication_date']));
 	}
 	
 	/**
@@ -677,10 +705,84 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	{
 		if (isset(static::DOCUMENT_ATTRIBUTES[$key])) {
 			$method = static::DOCUMENT_ATTRIBUTES[$key];
-			return $this->document->$method();
+			
+			// Handle both Document objects and stdClass objects from Prismic API v5
+			if ($this->document instanceof Document) {
+				return $this->document->$method();
+			} else {
+				// stdClass object - map method calls to properties
+				return $this->getStdClassDocumentProperty($key);
+			}
 		}
 		
 		return null;
+	}
+	
+	/**
+	 * Get document properties from stdClass response
+	 *
+	 * @param string $key
+	 * @return mixed
+	 */
+	protected function getStdClassDocumentProperty($key)
+	{
+		switch ($key) {
+			case 'id':
+				return $this->document->id ?? null;
+			case 'uid':
+				return $this->document->uid ?? null;
+			case 'type':
+				return $this->document->type ?? null;
+			case 'href':
+				return $this->document->href ?? null;
+			case 'tags':
+				return $this->document->tags ?? [];
+			case 'slug':
+				return $this->document->slug ?? null;
+			case 'slugs':
+				return $this->document->slugs ?? [];
+			case 'lang':
+				return $this->document->lang ?? null;
+			case 'alternate_languages':
+				return $this->document->alternate_languages ?? [];
+			case 'data':
+				return $this->document->data ?? null;
+			case 'first_publication_date':
+				return $this->document->first_publication_date ?? null;
+			case 'last_publication_date':
+				return $this->document->last_publication_date ?? null;
+			default:
+				return null;
+		}
+	}
+	
+	/**
+	 * Get a field from document data - works with both Document and stdClass
+	 *
+	 * @param string $path
+	 * @return mixed
+	 */
+	protected function getDocumentField($path)
+	{
+		if ($this->document instanceof Document) {
+			return $this->document->get($path);
+		} else {
+			// For stdClass, navigate the path manually
+			$parts = explode('.', $path);
+			$current = $this->document;
+			
+			foreach ($parts as $part) {
+				if (is_object($current) && isset($current->$part)) {
+					$current = $current->$part;
+				} elseif (is_array($current) && isset($current[$part])) {
+					$current = $current[$part];
+				} else {
+					return null;
+				}
+			}
+			
+			return $current;
+		}
 	}
 	
 	/**
@@ -696,6 +798,20 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 			return $value;
 		}
 		
+		// Handle Prismic SDK v5 fragment structure
+		if (is_object($value) && isset($value->type, $value->value)) {
+			$cast = $this->getCastType($key);
+			
+			if ('html' === $cast) {
+				return new HtmlString($this->convertToHtml($value));
+			}
+			
+			if ('text' === $cast) {
+				return $this->convertToText($value);
+			}
+		}
+		
+		// Handle legacy FragmentInterface (SDK v4 compatibility)
 		if ($value instanceof FragmentInterface) {
 			$cast = $this->getCastType($key);
 			
@@ -706,11 +822,98 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 			if ('text' === $cast) {
 				return $value->asText();
 			}
-			
-			// TODO: Dates
 		}
 		
 		return $this->eloquentCastAttribute($key, $value);
+	}
+
+	/**
+	 * Convert Prismic SDK v5 fragment to HTML
+	 *
+	 * @param object $fragment
+	 * @return string
+	 */
+	protected function convertToHtml($fragment)
+	{
+		if ($fragment->type === 'StructuredText' && is_array($fragment->value)) {
+			$html = '';
+			foreach ($fragment->value as $block) {
+				$html .= $this->convertBlockToHtml($block);
+			}
+			return $html;
+		}
+		
+		return '';
+	}
+
+	/**
+	 * Convert Prismic SDK v5 fragment to text
+	 *
+	 * @param object $fragment
+	 * @return string
+	 */
+	protected function convertToText($fragment)
+	{
+		if ($fragment->type === 'StructuredText' && is_array($fragment->value)) {
+			$text = '';
+			foreach ($fragment->value as $block) {
+				$text .= ($block->text ?? '') . "\n";
+			}
+			return trim($text);
+		}
+		
+		return '';
+	}
+
+	/**
+	 * Convert a single block to HTML
+	 *
+	 * @param object $block
+	 * @return string
+	 */
+	protected function convertBlockToHtml($block)
+	{
+		$text = $block->text ?? '';
+		$spans = $block->spans ?? [];
+		
+		// Apply spans in reverse order to maintain correct positioning
+		$sortedSpans = collect($spans)->sortByDesc('start');
+		
+		foreach ($sortedSpans as $span) {
+			$start = $span->start;
+			$end = $span->end;
+			$spanText = substr($text, $start, $end - $start);
+			
+			if ($span->type === 'strong') {
+				$wrappedText = "<strong>{$spanText}</strong>";
+			} elseif ($span->type === 'em') {
+				$wrappedText = "<em>{$spanText}</em>";
+			} else {
+				$wrappedText = $spanText;
+			}
+			
+			$text = substr_replace($text, $wrappedText, $start, $end - $start);
+		}
+		
+		// Wrap in appropriate block tag
+		switch ($block->type) {
+			case 'heading1':
+				return "<h1>{$text}</h1>";
+			case 'heading2':
+				return "<h2>{$text}</h2>";
+			case 'heading3':
+				return "<h3>{$text}</h3>";
+			case 'heading4':
+				return "<h4>{$text}</h4>";
+			case 'heading5':
+				return "<h5>{$text}</h5>";
+			case 'heading6':
+				return "<h6>{$text}</h6>";
+			case 'paragraph':
+				return "<p>{$text}</p>";
+			default:
+				return $text;
+		}
 	}
 	
 	/**
@@ -795,10 +998,13 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 		}
 		
 		$type = $this->getType();
-		$value = $this->document->get("{$type}.{$key}");
+		$value = $this->getDocumentField("data.{$type}.{$key}");
 		
+		// Handle both old DocumentLink objects and new SDK v5 link structure
 		if ($value instanceof DocumentLink) {
 			return $this->resolveLink($value);
+		} elseif (is_object($value) && isset($value->type) && $value->type === 'Link.document') {
+			return $this->resolveLinkV5($value);
 		}
 		
 		return $value;
@@ -818,11 +1024,15 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 	protected function hasOne($path, $class_name = null)
 	{
 		$type = $this->getType();
-		$link = $this->document->get("{$type}.{$path}");
+		$link = $this->getDocumentField("data.{$type}.{$path}");
 		
-		return $link instanceof DocumentLink
-			? $this->resolveLink($link, $class_name)
-			: null;
+		if ($link instanceof DocumentLink) {
+			return $this->resolveLink($link, $class_name);
+		} elseif (is_object($link) && isset($link->type) && $link->type === 'Link.document') {
+			return $this->resolveLinkV5($link, $class_name);
+		}
+		
+		return null;
 	}
 	
 	protected function hasMany($path, $class_name = null) : Collection
@@ -832,8 +1042,9 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 		$group_path = implode('.', $segments);
 		$type = $this->getType();
 		
-		$group = $this->document->get("{$type}.{$group_path}");
+		$group = $this->getDocumentField("data.{$type}.{$group_path}");
 		
+		// Handle legacy Group objects (SDK v4)
 		if ($group instanceof Group) {
 			return Collection::make($group->getArray())
 				->map(function(GroupDoc $doc) use ($link_key, $class_name) {
@@ -841,6 +1052,19 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 					return $link instanceof DocumentLink
 						? $this->resolveLink($link, $class_name)
 						: null;
+				})
+				->filter();
+		}
+		
+		// Handle new Group structure (SDK v5)
+		if (is_object($group) && isset($group->type) && $group->type === 'Group' && is_array($group->value)) {
+			return Collection::make($group->value)
+				->map(function($item) use ($link_key, $class_name) {
+					$link = $item->$link_key ?? null;
+					if ($link && is_object($link) && isset($link->type) && $link->type === 'Link.document') {
+						return $this->resolveLinkV5($link, $class_name);
+					}
+					return null;
 				})
 				->filter();
 		}
@@ -855,11 +1079,23 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
 		
 		return $model_class::find($link->getId());
 	}
+
+	protected function resolveLinkV5($linkFragment, $class_name = null) : ?self
+	{
+		if (!isset($linkFragment->value->document->id)) {
+			return null;
+		}
+
+		$document = $linkFragment->value->document;
+		$model_class = $class_name ?? $this->inferLinkClassName($document->type);
+		
+		return $model_class::find($document->id);
+	}
 	
 	protected function inferLinkClassName($type) : string
 	{
 		$namespace = substr(static::class, 0, strrpos(static::class, '\\'));
-		$class_name = studly_case($type);
+		$class_name = Str::studly($type);
 		
 		return "{$namespace}\\{$class_name}";
 	}

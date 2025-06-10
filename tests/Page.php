@@ -8,6 +8,7 @@ class Page extends Model
 {
 	protected $casts = [
 		'title' => 'text',
+		'body' => 'html',
 	];
 	
 	public function resolvedAuthorLinkResolver()

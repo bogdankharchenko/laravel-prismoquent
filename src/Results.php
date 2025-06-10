@@ -24,18 +24,32 @@ class Results extends LengthAwarePaginator
 	 * @param \Galahad\Prismoquent\Model $model
 	 * @param object $response
 	 */
-	public function __construct(Model $model, Response $response)
+	public function __construct(Model $model, $response)
 	{
-		$items = Collection::make($response->getResults())
-			->map(function(Document $document) use ($model) {
+		// Handle both Response objects and stdClass objects from Prismic API v5
+		if ($response instanceof Response) {
+			$results = $response->getResults();
+			$total = $response->getTotalResultsSize();
+			$perPage = $response->getResultsPerPage();
+			$currentPage = $response->getPage();
+		} else {
+			// stdClass response from Prismic API v5
+			$results = $response->results ?? [];
+			$total = $response->total_results_size ?? 0;
+			$perPage = $response->results_per_page ?? 20;
+			$currentPage = $response->page ?? 1;
+		}
+		
+		$items = Collection::make($results)
+			->map(function($document) use ($model) {
 				return $model->newInstance($document);
 			});
 		
 		parent::__construct(
 			$items,
-			$response->getTotalResultsSize(),
-			$response->getResultsPerPage(),
-			$response->getPage()
+			$total,
+			$perPage,
+			$currentPage
 		);
 		
 		$this->response = $response;

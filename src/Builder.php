@@ -763,7 +763,7 @@ class Builder
 			return null;
 		}
 		
-		return object_get($results->first(), $path);
+		return data_get($results->first(), $path);
 	}
 	
 	/**
@@ -873,6 +873,16 @@ class Builder
 				$clone->{$property} = null;
 			}
 		});
+	}
+	
+	/**
+	 * Determine if the builder prevents accessing missing attributes.
+	 *
+	 * @return bool
+	 */
+	public function preventsAccessingMissingAttributes()
+	{
+		return false;
 	}
 	
 	/**

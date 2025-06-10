@@ -2,30 +2,30 @@
 
 namespace Galahad\Prismoquent\Tests;
 
-use Prismic\Fragment\CompositeSlice;
-use Prismic\Fragment\GroupDoc;
-use Prismic\Fragment\SliceZone;
-
 class SliceTest extends TestCase
 {
 	public function test_slices() : void
 	{
 		$page = Page::find('W3RRKh0AADaEY847');
 		
-		/** @var SliceZone $slices */
+		// In Prismic SDK v5, slices are stdClass objects
 		$slices = $page->slices;
 		
-		$this->assertInstanceOf(SliceZone::class, $slices);
+		$this->assertIsObject($slices);
+		$this->assertEquals('SliceZone', $slices->type);
+		$this->assertIsArray($slices->value);
 		
-		/** @var CompositeSlice $slice */
-		$slice = $slices->getSlices()[0];
+		// Test first slice
+		$slice = $slices->value[0];
 		
-		$this->assertInstanceOf(CompositeSlice::class, $slice);
-		$this->assertEquals('quote', $slice->getSliceType());
+		$this->assertIsObject($slice);
+		$this->assertEquals('Slice', $slice->type);
+		$this->assertEquals('quote', $slice->slice_type);
+		$this->assertObjectHasProperty('non-repeat', $slice);
 		
-		/** @var GroupDoc $group */
-		$group = $slice->getPrimary();
-		
-		$group->asHtml();
+		// Test slice content
+		$quoteBody = $slice->{'non-repeat'}->quote_body;
+		$this->assertEquals('StructuredText', $quoteBody->type);
+		$this->assertIsArray($quoteBody->value);
 	}
 }

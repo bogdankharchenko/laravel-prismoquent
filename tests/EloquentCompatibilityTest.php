@@ -35,7 +35,7 @@ class EloquentCompatibilityTest extends TestCase
 		
 		$this->assertEquals(1, $pages->count());
 		$this->assertInstanceOf(Page::class, $pages->first());
-		$this->assertContains('second demo', strtolower($pages->first()->title));
+		$this->assertStringContainsString('second demo', strtolower($pages->first()->title));
 	}
 	
 	public function test_content_can_be_loaded_by_uid() : void
